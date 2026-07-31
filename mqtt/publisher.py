@@ -53,6 +53,9 @@ class MqttPublisher:
         Args:
             device: The Device entity to publish.
         """
+        if not self._client.is_connected:
+            return
+
         prefix = self._client.topic_prefix
         mac_topic = device.mac.replace(":", "_").lower()
 

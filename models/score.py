@@ -19,7 +19,7 @@ SOURCE_POINTS: dict[DetectionSource, int] = {
     DetectionSource.DHCP: 80,
     DetectionSource.MQTT: 70,
     DetectionSource.HA_COMPANION: 70,
-    DetectionSource.PING: 40,
+    DetectionSource.PING: 60,
     DetectionSource.BLUETOOTH: 60,
     DetectionSource.ESPHOME: 65,
     DetectionSource.SNMP: 50,

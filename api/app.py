@@ -20,6 +20,14 @@ from api.routes import (
     stats_router,
 )
 from config.loader import ConfigLoader
+from core.bus import AsyncioEventBus
+from detectors.registry import DetectorRegistry
+from mqtt.client import MqttClient
+from mqtt.publisher import MqttPublisher
+from services.confidence import ConfidenceCalculator
+from services.device_manager import DeviceManager
+from services.presence import PresenceEngine
+from workers.decay import DecayWorker
 
 # Module-level reference to the config (set during create_app)
 _app_config: ConfigLoader | None = None
@@ -29,17 +37,76 @@ _app_config: ConfigLoader | None = None
 async def lifespan(app: FastAPI) -> Any:  # type: ignore[type-arg]
     """Application lifespan handler — startup and shutdown.
 
-    Database is initialized externally; this handles any API-specific
-    startup/shutdown needs.
+    Initializes and starts all detection components:
+        - EventBus for internal event routing
+        - DeviceManager for device state persistence
+        - ConfidenceCalculator for scoring
+        - PresenceEngine for detection pipeline
+        - DetectorRegistry for network scanners
+        - MqttClient + MqttPublisher for Home Assistant integration
+        - DecayWorker for confidence decay
     """
     import structlog
 
     logger = structlog.get_logger(__name__)
     logger.info("api_starting")
 
+    # Get config from app state (set in create_app)
+    config = app.state.config
+
+    # 1. Create the EventBus
+    bus = AsyncioEventBus()
+
+    # 2. Create DeviceManager and load existing devices from DB
+    device_manager = DeviceManager()
+    await device_manager.load_all_from_db()
+
+    # 3. Create ConfidenceCalculator with config values
+    online_threshold = config.get("presence", "online_threshold", default=50)
+    decay_rate = config.get("presence", "decay_rate", default=5)
+    timeout = config.get("presence", "timeout", default=300)
+    confidence = ConfidenceCalculator(
+        online_threshold=online_threshold,
+        decay_rate=decay_rate,
+        default_ttl=timeout,
+    )
+
+    # 4. Create and subscribe PresenceEngine
+    engine = PresenceEngine(bus, device_manager, confidence)
+    engine.subscribe()
+
+    # 5. Create and start MQTT client + publisher
+    mqtt_client = MqttClient(config, bus)
+    mqtt_publisher = MqttPublisher(mqtt_client, bus)
+    mqtt_publisher.subscribe()
+    await mqtt_client.connect()
+
+    # 6. Create and start DetectorRegistry
+    registry = DetectorRegistry(config, bus)
+    registry.load_enabled()
+    await registry.start_all()
+
+    # 7. Create and start DecayWorker
+    decay_interval = config.get("presence", "decay_interval", default=60)
+    decay_worker = DecayWorker(engine, interval=decay_interval)
+    await decay_worker.start()
+
+    # Store references on app.state for API routes to access
+    app.state.bus = bus
+    app.state.device_manager = device_manager
+    app.state.registry = registry
+
+    logger.info("all_components_started")
+
     yield
 
+    # Shutdown
     logger.info("api_shutting_down")
+    await decay_worker.stop()
+    await registry.stop_all()
+    await mqtt_client.disconnect()
+    await bus.shutdown()
+    logger.info("all_components_stopped")
 
 
 def create_app(config: ConfigLoader | None = None) -> FastAPI:
@@ -58,6 +125,9 @@ def create_app(config: ConfigLoader | None = None) -> FastAPI:
         config = ConfigLoader.load("config/config.yaml")
     _app_config = config
 
+    # Store config in a temporary holder so lifespan can access it via app.state
+    # We set app.state.config after creating the app below
+
     # Get API settings
     swagger_enabled = config.get("api", "swagger_enabled", default=True)
     cors_origins = config.get("api", "cors_origins", default=["*"])
@@ -71,6 +141,9 @@ def create_app(config: ConfigLoader | None = None) -> FastAPI:
         openapi_url="/openapi.json" if swagger_enabled else None,
         lifespan=lifespan,
     )
+
+    # Store config on app.state for lifespan access
+    app.state.config = config
 
     # Setup middleware
     setup_middleware(app, cors_origins)

@@ -71,28 +71,22 @@ class PingDetector(BaseDetector):
     def _get_ping_targets(self) -> list[str]:
         """Get the list of IPs to ping.
 
-        Pings the gateway and a few key IPs from the subnet.
-        Full subnet sweep can be enabled via configuration.
+        Scans all usable hosts in the configured subnet.
 
         Returns:
             List of IP addresses to ping.
         """
         targets: list[str] = []
 
-        # Always ping the gateway (first usable IP in subnet)
         try:
             network = ipaddress.IPv4Network(self._subnet, strict=False)
-            # Gateway is typically .1
-            gateway = str(network.network_address + 1)
-            targets.append(gateway)
-
-            # Add a few common device IPs (.100-.110)
-            base = int(network.network_address)
-            for i in range(100, min(111, network.num_addresses - 1)):
-                targets.append(str(network.network_address + i))
+            # Iterate all usable hosts in the subnet (excludes network and broadcast)
+            for host in network.hosts():
+                targets.append(str(host))
         except ValueError:
             self._log.warning("invalid_subnet", subnet=self._subnet)
 
+        self._log.debug("ping_targets_resolved", count=len(targets), subnet=self._subnet)
         return targets
 
     async def _ping_batch(self, ips: list[str]) -> list[dict[str, Any]]:

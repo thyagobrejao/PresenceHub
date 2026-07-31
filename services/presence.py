@@ -86,9 +86,13 @@ class PresenceEngine:
             existing = await self._device_manager.get_by_ip(ip)
             if existing:
                 mac_raw = existing.mac
+            else:
+                # Generate a deterministic synthetic MAC from IP
+                # Uses locally-administered range (02:xx:xx:xx:xx:xx)
+                mac_raw = self._ip_to_synthetic_mac(ip)
 
         if not mac_raw:
-            logger.debug("detection_skipped_no_mac", source=str(source), ip=ip)
+            logger.debug("detection_skipped_no_identifier", source=str(source))
             return
 
         mac = MacAddress(mac_raw)
@@ -163,3 +167,22 @@ class PresenceEngine:
                 logger.info("device_decayed", mac=mac)
 
         logger.debug("decay_cycle_complete", offline_count=len(went_offline))
+
+    @staticmethod
+    def _ip_to_synthetic_mac(ip: str) -> str:
+        """Generate a deterministic synthetic MAC address from an IP.
+
+        Uses the locally-administered bit (02:xx) to avoid collision
+        with real hardware MACs. Format: 02:PH:xx:xx:xx:xx where
+        xx octets are derived from the IP octets.
+
+        Args:
+            ip: IPv4 address string.
+
+        Returns:
+            Synthetic MAC address string.
+        """
+        parts = ip.split(".")
+        if len(parts) != 4:
+            return ""
+        return f"02:50:{int(parts[0]):02X}:{int(parts[1]):02X}:{int(parts[2]):02X}:{int(parts[3]):02X}"

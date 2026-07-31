@@ -26,7 +26,7 @@ mqtt:
 # -----------------------------------------------------------------------------
 network:
   interface: eth0
-  subnet: 192.168.1.0/24
+  subnet: 192.168.69.0/24
   ping_timeout: 2
   ping_count: 1
   arp_scan_interval: 60
