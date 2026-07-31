@@ -42,13 +42,8 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 def _env_override(config: dict[str, Any], prefix: str = "PH_") -> dict[str, Any]:
     """Override configuration values from environment variables.
 
-    Environment variables use the prefix 'PH_' followed by uppercase,
-    underscore-separated keys. Nested keys use double underscore.
-
-    Examples:
-        PH_MQTT_HOST=mosquitto      -> config["mqtt"]["host"]
-        PH_PRESENCE_TIMEOUT=600      -> config["presence"]["timeout"]
-        PH_DETECTORS_ARP_ENABLED=false -> config["detectors"]["arp"]["enabled"]
+    Supports both 'PH_' prefixed variables with double underscores (e.g. PH_MQTT__HOST=127.0.0.1)
+    and standard environment variables (e.g. MQTT_HOST=127.0.0.1).
 
     Args:
         config: The configuration dictionary to override.
@@ -57,6 +52,37 @@ def _env_override(config: dict[str, Any], prefix: str = "PH_") -> dict[str, Any]
     Returns:
         Configuration with environment variable overrides applied.
     """
+    # Direct mappings for standard environment variables
+    direct_mappings: dict[str, tuple[str, ...]] = {
+        "MQTT_HOST": ("mqtt", "host"),
+        "MQTT_PORT": ("mqtt", "port"),
+        "MQTT_USERNAME": ("mqtt", "username"),
+        "MQTT_PASSWORD": ("mqtt", "password"),
+        "MQTT_CLIENT_ID": ("mqtt", "client_id"),
+        "MQTT_TOPIC_PREFIX": ("mqtt", "topic_prefix"),
+        "NETWORK_INTERFACE": ("network", "interface"),
+        "NETWORK_SUBNET": ("network", "subnet"),
+        "HA_DISCOVERY_ENABLED": ("home_assistant", "discovery_enabled"),
+        "HA_DISCOVERY_PREFIX": ("home_assistant", "discovery_prefix"),
+        "LOG_LEVEL": ("logging", "level"),
+    }
+
+    for env_key, path in direct_mappings.items():
+        if env_key in os.environ and os.environ[env_key]:
+            val = os.environ[env_key]
+            target = config
+            for part in path[:-1]:
+                if part not in target or not isinstance(target[part], dict):
+                    target[part] = {}
+                target = target[part]
+            final_key = path[-1]
+            existing = target.get(final_key)
+            if existing is not None:
+                target[final_key] = _cast_env_value(val, type(existing))
+            else:
+                target[final_key] = val
+
+    # Prefix-based overrides (PH_PREFIX__KEY)
     for env_key, env_value in os.environ.items():
         if not env_key.startswith(prefix):
             continue
