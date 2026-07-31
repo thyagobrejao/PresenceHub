@@ -129,6 +129,7 @@ def ha_device_tracker_discovery(
         "json_attributes_topic": f"{topic_prefix}/{device_id}/json",
         "payload_home": "online",
         "payload_not_home": "offline",
+        "availability_topic": f"{topic_prefix}/status",
         "source_type": "router",
         "icon": "mdi:map-marker",
         "device": {

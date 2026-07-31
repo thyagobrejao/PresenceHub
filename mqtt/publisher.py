@@ -6,6 +6,8 @@ presence updates to MQTT topics for Home Assistant consumption.
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 
 from core.bus import AsyncioEventBus
@@ -29,15 +31,17 @@ class MqttPublisher:
         home/presence/<mac>/json     — full JSON payload
     """
 
-    def __init__(self, client: MqttClient, bus: AsyncioEventBus) -> None:
+    def __init__(self, client: MqttClient, bus: AsyncioEventBus, device_manager: Any = None) -> None:
         """Initialize the publisher.
 
         Args:
             client: MQTT client instance.
             bus: Internal EventBus for subscribing to device events.
+            device_manager: Optional DeviceManager for resolving full device metadata.
         """
         self._client = client
         self._bus = bus
+        self._device_manager = device_manager
 
     def subscribe(self) -> None:
         """Subscribe to relevant device events on the EventBus."""
@@ -65,7 +69,7 @@ class MqttPublisher:
                 f"{prefix}/{mac_topic}/status",
                 online_payload(device),
                 qos=1,
-                retain=False,
+                retain=True,
             )
         except Exception:
             logger.exception("mqtt_publish_status_failed", mac=device.mac)
@@ -76,59 +80,19 @@ class MqttPublisher:
                 f"{prefix}/{mac_topic}/json",
                 device_presence_payload(device),
                 qos=1,
-                retain=False,
+                retain=True,
             )
         except Exception:
             logger.exception("mqtt_publish_json_failed", mac=device.mac)
 
         logger.debug("mqtt_device_published", mac=device.mac, online=device.is_online)
 
-    async def _on_device_online(self, payload: EventPayload) -> None:
-        """Handle DEVICE_ONLINE event — publish online status."""
-        device = self._payload_to_device(payload)
-        if device:
-            await self.publish_device(device)
+    async def _resolve_device(self, payload: EventPayload) -> Device | None:
+        """Resolve a full Device from an event payload.
 
-    async def _on_device_offline(self, payload: EventPayload) -> None:
-        """Handle DEVICE_OFFLINE event — publish offline status."""
-        device = self._payload_to_device(payload)
-        if device:
-            await self.publish_device(device)
-
-    async def _on_device_updated(self, payload: EventPayload) -> None:
-        """Handle DEVICE_UPDATED event — publish updated device."""
-        device = self._payload_to_device(payload)
-        if device:
-            await self.publish_device(device)
-
-    async def _on_device_detected(self, payload: EventPayload) -> None:
-        """Handle DEVICE_DETECTED event — publish detected device.
-
-        This publishes immediately when a new device is first seen,
-        even before full processing by the PresenceEngine.
-        """
-        mac = str(payload.get("mac", ""))
-        ip = str(payload.get("ip", ""))
-        hostname = str(payload.get("hostname", ""))
-
-        if not mac and not ip:
-            return
-
-        # Build a minimal device object for immediate publishing
-        device = Device(
-            mac=mac or "unknown",
-            ip=ip or "",
-            hostname=hostname or "",
-        )
-
-        try:
-            await self.publish_device(device)
-        except Exception:
-            logger.exception("mqtt_publish_detected_failed")
-
-    @staticmethod
-    def _payload_to_device(payload: EventPayload) -> Device | None:
-        """Convert an EventPayload to a Device if possible.
+        First tries to fetch the device from DeviceManager (which has
+        the saved friendly_name and other metadata). Falls back to
+        building a minimal Device from the event payload.
 
         Args:
             payload: Event payload dictionary.
@@ -140,6 +104,13 @@ class MqttPublisher:
         if not mac:
             return None
 
+        # Try to get full device from DeviceManager (includes friendly_name)
+        if self._device_manager:
+            device = await self._device_manager.get(mac)
+            if device:
+                return device
+
+        # Fallback: build a minimal device from event payload
         return Device(
             mac=mac,
             ip=str(payload.get("ip", "")),
@@ -147,3 +118,36 @@ class MqttPublisher:
             vendor=str(payload.get("vendor", "")),
             confidence=int(payload.get("confidence", 0)),
         )
+
+    async def _on_device_online(self, payload: EventPayload) -> None:
+        """Handle DEVICE_ONLINE event — publish online status."""
+        device = await self._resolve_device(payload)
+        if device:
+            await self.publish_device(device)
+
+    async def _on_device_offline(self, payload: EventPayload) -> None:
+        """Handle DEVICE_OFFLINE event — publish offline status."""
+        device = await self._resolve_device(payload)
+        if device:
+            await self.publish_device(device)
+
+    async def _on_device_updated(self, payload: EventPayload) -> None:
+        """Handle DEVICE_UPDATED event — publish updated device."""
+        device = await self._resolve_device(payload)
+        if device:
+            await self.publish_device(device)
+
+    async def _on_device_detected(self, payload: EventPayload) -> None:
+        """Handle DEVICE_DETECTED event — publish detected device.
+
+        This publishes immediately when a new device is first seen,
+        even before full processing by the PresenceEngine.
+        """
+        device = await self._resolve_device(payload)
+        if not device:
+            return
+
+        try:
+            await self.publish_device(device)
+        except Exception:
+            logger.exception("mqtt_publish_detected_failed")
