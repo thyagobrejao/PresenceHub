@@ -165,17 +165,21 @@ class MqttClient:
                 # Connection established — process messages
                 await self._message_loop()
 
-            except (aiomqtt.MqttError, OSError, asyncio.CancelledError) as exc:
-                if isinstance(exc, asyncio.CancelledError):
-                    break
-
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
                 self._connected = False
                 logger.warning(
-                    "mqtt_connection_lost",
-                    error=str(exc),
+                    "mqtt_connection_failed",
+                    host=self._host,
+                    port=self._port,
+                    error=str(exc) or repr(exc),
                     reconnect_in=backoff,
                 )
-                await self._bus.publish(EventType.MQTT_DISCONNECTED, {"reason": str(exc)})
+                try:
+                    await self._bus.publish(EventType.MQTT_DISCONNECTED, {"reason": str(exc)})
+                except Exception:
+                    pass
 
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, self._reconnect_max)
