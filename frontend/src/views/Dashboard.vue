@@ -11,10 +11,14 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 onMounted(async () => {
   await store.loadDevices()
   await store.loadStats()
+  await store.loadMqttStatus()
+  await store.loadHistory()
   if (autoRefresh.value) {
     refreshTimer = setInterval(() => {
       store.loadDevices()
       store.loadStats()
+      store.loadMqttStatus()
+      store.loadHistory()
     }, 5000)
   }
 })
@@ -22,6 +26,11 @@ onMounted(async () => {
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
 })
+
+function getDeviceNameByMac(mac: string): string {
+  const device = store.devices.find(d => d.mac === mac)
+  return device ? (device.friendly_name || device.hostname || device.mac) : mac
+}
 
 function onSearch() {
   store.setSearch(searchInput.value)
@@ -105,6 +114,91 @@ function formatUptime(lastSeen: string): string {
       <div class="card text-center">
         <div class="text-3xl font-bold text-purple-600">{{ store.stats.total_events }}</div>
         <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">Detections</div>
+      </div>
+    </div>
+
+    <!-- MQTT Status & Recent Events Panel -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <!-- MQTT Connection Info Card -->
+      <div class="card flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
+              <span>📡</span>
+              <span>MQTT Broker Status</span>
+            </h3>
+            <span
+              :class="store.mqttStatus.connected ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'"
+              class="px-2.5 py-0.5 rounded-full text-xs font-semibold flex items-center space-x-1"
+            >
+              <span :class="store.mqttStatus.connected ? 'bg-green-500' : 'bg-red-500'" class="w-2 h-2 rounded-full inline-block animate-pulse"></span>
+              <span>{{ store.mqttStatus.connected ? 'CONNECTED' : 'DISCONNECTED' }}</span>
+            </span>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between border-b border-gray-100 dark:border-gray-800 pb-1.5">
+              <span class="text-gray-500 dark:text-gray-400">Broker Host</span>
+              <span class="font-mono font-medium text-gray-800 dark:text-gray-200">{{ store.mqttStatus.host }}:{{ store.mqttStatus.port }}</span>
+            </div>
+            <div class="flex justify-between border-b border-gray-100 dark:border-gray-800 pb-1.5">
+              <span class="text-gray-500 dark:text-gray-400">Base Topic Prefix</span>
+              <span class="font-mono text-xs text-primary-600 dark:text-primary-400">{{ store.mqttStatus.topic_prefix }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500 dark:text-gray-400">HA Auto-Discovery</span>
+              <span class="text-xs font-semibold text-green-600 dark:text-green-400">Active (homeassistant/#)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400 flex items-center justify-between">
+          <span>Home Assistant Discovery</span>
+          <span>MQTT QoS 1 Retained</span>
+        </div>
+      </div>
+
+      <!-- Live Recent Events Panel (2 Columns on Desktop) -->
+      <div class="card lg:col-span-2">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
+            <span>⚡</span>
+            <span>Últimos Eventos Enviados ao MQTT</span>
+          </h3>
+          <span class="text-xs text-gray-400">Histórico em Tempo Real</span>
+        </div>
+
+        <div v-if="store.recentEvents.length === 0" class="text-center py-6 text-gray-400 text-sm">
+          Nenhum evento registrado recentemente.
+        </div>
+
+        <div v-else class="space-y-2 max-h-48 overflow-y-auto pr-1">
+          <div
+            v-for="event in store.recentEvents.slice(0, 5)"
+            :key="event.id"
+            class="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs transition-colors"
+          >
+            <div class="flex items-center space-x-2.5 min-w-0">
+              <span class="text-base">{{ getSourceIcon(event.source) }}</span>
+              <div class="truncate">
+                <div class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {{ getDeviceNameByMac(event.mac) }}
+                </div>
+                <div class="text-gray-400 font-mono text-[10px] truncate">
+                  {{ store.mqttStatus.topic_prefix }}/{{ event.mac }}/json
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-3 flex-shrink-0 text-right">
+              <div>
+                <span class="font-mono text-gray-600 dark:text-gray-300">{{ event.ip || event.mac }}</span>
+                <div class="text-[10px] text-gray-400 font-mono">{{ event.source.toUpperCase() }} ({{ event.confidence }}%)</div>
+              </div>
+              <span class="text-gray-400 font-mono text-[11px] whitespace-nowrap">{{ formatUptime(event.timestamp) }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

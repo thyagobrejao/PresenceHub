@@ -1,10 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchDevices, fetchStats, updateDevice, type Device, type Stats } from '../api/client'
+import { fetchDevices, fetchHistory, fetchMqttStatus, fetchStats, updateDevice, type Device, type HistoryEvent, type MqttStatus, type Stats } from '../api/client'
 
 export const useDeviceStore = defineStore('devices', () => {
   const devices = ref<Device[]>([])
   const stats = ref<Stats>({ total_devices: 0, online_devices: 0, offline_devices: 0, total_events: 0, events_by_source: {} })
+  const mqttStatus = ref<MqttStatus>({ connected: false, host: 'N/A', port: 1883, topic_prefix: 'home/presence' })
+  const recentEvents = ref<HistoryEvent[]>([])
   const loading = ref(false)
   const searchQuery = ref('')
   const filterStatus = ref<string>('')
@@ -51,6 +53,22 @@ export const useDeviceStore = defineStore('devices', () => {
     }
   }
 
+  async function loadMqttStatus() {
+    try {
+      mqttStatus.value = await fetchMqttStatus()
+    } catch {
+      mqttStatus.value = { connected: false, host: 'N/A', port: 1883, topic_prefix: 'home/presence' }
+    }
+  }
+
+  async function loadHistory() {
+    try {
+      recentEvents.value = await fetchHistory({ limit: 10 })
+    } catch {
+      recentEvents.value = []
+    }
+  }
+
   async function saveDeviceName(mac: string, friendlyName: string) {
     const updated = await updateDevice(mac, { friendly_name: friendlyName })
     const idx = devices.value.findIndex(d => d.mac === mac)
@@ -72,6 +90,8 @@ export const useDeviceStore = defineStore('devices', () => {
   return {
     devices,
     stats,
+    mqttStatus,
+    recentEvents,
     loading,
     searchQuery,
     filterStatus,
@@ -80,6 +100,8 @@ export const useDeviceStore = defineStore('devices', () => {
     offlineDevices,
     loadDevices,
     loadStats,
+    loadMqttStatus,
+    loadHistory,
     saveDeviceName,
     setSearch,
     setFilter,

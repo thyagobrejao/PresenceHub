@@ -68,12 +68,24 @@ export async function deleteDevice(mac: string): Promise<void> {
   await api.delete(`/devices/${encodeURIComponent(mac)}`)
 }
 
+export interface MqttStatus {
+  connected: boolean
+  host: string
+  port: number
+  topic_prefix: string
+}
+
 export async function fetchStats(): Promise<Stats> {
   const { data } = await api.get<Stats>('/stats')
   return data
 }
 
-export async function fetchHistory(params?: { mac?: string; source?: string }): Promise<HistoryEvent[]> {
+export async function fetchMqttStatus(): Promise<MqttStatus> {
+  const { data } = await api.get<MqttStatus>('/stats/mqtt')
+  return data
+}
+
+export async function fetchHistory(params?: { mac?: string; source?: string; limit?: number }): Promise<HistoryEvent[]> {
   const { data } = await api.get<HistoryEvent[]>('/history', { params })
   return data
 }

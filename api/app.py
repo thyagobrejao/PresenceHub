@@ -103,6 +103,7 @@ async def lifespan(app: FastAPI) -> Any:  # type: ignore[type-arg]
     app.state.bus = bus
     app.state.device_manager = device_manager
     app.state.registry = registry
+    app.state.mqtt_client = mqtt_client
 
     logger.info("all_components_started")
 
