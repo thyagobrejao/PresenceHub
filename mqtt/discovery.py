@@ -60,7 +60,18 @@ class HADiscovery:
         """Subscribe to device events to trigger discovery."""
         self._bus.subscribe(EventType.DEVICE_DETECTED, self._on_device_detected)
         self._bus.subscribe(EventType.DEVICE_UPDATED, self._on_device_updated)
+        self._bus.subscribe(EventType.MQTT_CONNECTED, self._on_mqtt_connected)
         logger.info("ha_discovery_subscribed")
+
+    async def _on_mqtt_connected(self, payload: EventPayload) -> None:
+        """Handle MQTT_CONNECTED event — publish discovery for all known devices."""
+        if not self._device_manager:
+            return
+
+        devices = await self._device_manager.get_all()
+        logger.info("ha_discovery_publishing_all", count=len(devices))
+        for device in devices:
+            await self.publish_discovery(device, force=True)
 
     async def publish_discovery(self, device: Device, force: bool = False) -> None:
         """Publish MQTT Discovery configs for a device.

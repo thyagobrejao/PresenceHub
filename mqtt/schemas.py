@@ -75,10 +75,22 @@ def ha_binary_sensor_discovery(
     discovery_topic = (
         f"{discovery_prefix}/binary_sensor/{sensor_id}/config"
     )
+    display_name = device.friendly_name or device.hostname or f"Device {device.mac}"
+
+    device_dict: dict[str, Any] = {
+        "identifiers": [f"presencehub_{device_id}"],
+        "name": display_name,
+        "manufacturer": device.vendor or "PresenceHub",
+        "model": str(device.device_type) if device.device_type else "Device",
+    }
+    suggested_area = _get_suggested_area(device.device_type)
+    if suggested_area:
+        device_dict["suggested_area"] = suggested_area
 
     payload: dict[str, Any] = {
-        "name": device.friendly_name or device.hostname or f"Device {device.mac}",
+        "name": display_name,
         "unique_id": f"presencehub_{sensor_id}",
+        "object_id": sensor_id,
         "device_class": "presence",
         "state_topic": f"{topic_prefix}/{device_id}/status",
         "json_attributes_topic": f"{topic_prefix}/{device_id}/json",
@@ -86,13 +98,7 @@ def ha_binary_sensor_discovery(
         "payload_off": "offline",
         "availability_topic": f"{topic_prefix}/status",
         "icon": _get_device_icon(device.device_type),
-        "device": {
-            "identifiers": [f"presencehub_{device_id}"],
-            "name": device.friendly_name or device.hostname or device.mac,
-            "manufacturer": device.vendor or "PresenceHub",
-            "model": str(device.device_type),
-            "suggested_area": _get_suggested_area(device.device_type),
-        },
+        "device": device_dict,
     }
 
     return discovery_topic, payload
@@ -121,10 +127,22 @@ def ha_device_tracker_discovery(
     discovery_topic = (
         f"{discovery_prefix}/device_tracker/{tracker_id}/config"
     )
+    display_name = device.friendly_name or device.hostname or f"Device {device.mac}"
+
+    device_dict: dict[str, Any] = {
+        "identifiers": [f"presencehub_{device_id}"],
+        "name": display_name,
+        "manufacturer": device.vendor or "PresenceHub",
+        "model": str(device.device_type) if device.device_type else "Device",
+    }
+    suggested_area = _get_suggested_area(device.device_type)
+    if suggested_area:
+        device_dict["suggested_area"] = suggested_area
 
     payload: dict[str, Any] = {
-        "name": device.friendly_name or device.hostname or f"Device {device.mac}",
+        "name": display_name,
         "unique_id": f"presencehub_tracker_{device_id}",
+        "object_id": tracker_id,
         "state_topic": f"{topic_prefix}/{device_id}/status",
         "json_attributes_topic": f"{topic_prefix}/{device_id}/json",
         "payload_home": "online",
@@ -132,13 +150,7 @@ def ha_device_tracker_discovery(
         "availability_topic": f"{topic_prefix}/status",
         "source_type": "router",
         "icon": "mdi:map-marker",
-        "device": {
-            "identifiers": [f"presencehub_{device_id}"],
-            "name": device.friendly_name or device.hostname or device.mac,
-            "manufacturer": device.vendor or "PresenceHub",
-            "model": str(device.device_type),
-            "suggested_area": _get_suggested_area(device.device_type),
-        },
+        "device": device_dict,
     }
 
     return discovery_topic, payload
