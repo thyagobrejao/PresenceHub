@@ -10,9 +10,11 @@ Provides CRUD endpoints for devices:
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from api.dependencies import get_device_repo
+from api.dependencies import get_device_manager, get_device_repo, get_event_bus
 from api.schemas.device import (
     DeviceCreate,
     DeviceListResponse,
@@ -141,6 +143,8 @@ async def update_device(
     mac: str,
     data: DeviceUpdate,
     repo: DeviceRepository = Depends(get_device_repo),
+    device_manager: Any = Depends(get_device_manager),
+    bus: Any = Depends(get_event_bus),
 ) -> DeviceResponse:
     """Update an existing device.
 
@@ -148,6 +152,8 @@ async def update_device(
         mac: Device MAC address.
         data: Fields to update (partial update).
         repo: Device repository (injected).
+        device_manager: Device manager instance.
+        bus: Event bus instance.
 
     Returns:
         Updated device.
@@ -178,6 +184,14 @@ async def update_device(
         device.ttl = data.ttl
 
     await repo.update(device)
+
+    if device_manager:
+        await device_manager.save(device)
+
+    if bus:
+        from core.events import EventType
+        await bus.publish(EventType.DEVICE_UPDATED, device.to_dict())
+
     return _device_to_response(device)
 
 

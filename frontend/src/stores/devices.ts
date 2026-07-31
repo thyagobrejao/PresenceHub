@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchDevices, fetchStats, type Device, type Stats } from '../api/client'
+import { fetchDevices, fetchStats, updateDevice, type Device, type Stats } from '../api/client'
 
 export const useDeviceStore = defineStore('devices', () => {
   const devices = ref<Device[]>([])
@@ -51,6 +51,14 @@ export const useDeviceStore = defineStore('devices', () => {
     }
   }
 
+  async function saveDeviceName(mac: string, friendlyName: string) {
+    const updated = await updateDevice(mac, { friendly_name: friendlyName })
+    const idx = devices.value.findIndex(d => d.mac === mac)
+    if (idx !== -1) {
+      devices.value[idx] = { ...devices.value[idx], ...updated }
+    }
+  }
+
   function setSearch(query: string) {
     searchQuery.value = query
     loadDevices()
@@ -72,6 +80,7 @@ export const useDeviceStore = defineStore('devices', () => {
     offlineDevices,
     loadDevices,
     loadStats,
+    saveDeviceName,
     setSearch,
     setFilter,
   }

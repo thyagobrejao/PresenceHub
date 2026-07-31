@@ -7,6 +7,9 @@ and other shared resources.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from typing import Any
+
+from fastapi import Request
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,3 +53,13 @@ def get_config() -> ConfigLoader:
     if _app_config is None:
         raise RuntimeError("Configuration not loaded. Call create_app() first.")
     return _app_config
+
+
+def get_device_manager(request: Request) -> Any:
+    """Dependency that provides the active DeviceManager instance."""
+    return getattr(request.app.state, "device_manager", None)
+
+
+def get_event_bus(request: Request) -> Any:
+    """Dependency that provides the active EventBus instance."""
+    return getattr(request.app.state, "bus", None)

@@ -23,6 +23,7 @@ from config.loader import ConfigLoader
 from core.bus import AsyncioEventBus
 from detectors.registry import DetectorRegistry
 from mqtt.client import MqttClient
+from mqtt.discovery import HADiscovery
 from mqtt.publisher import MqttPublisher
 from services.confidence import ConfidenceCalculator
 from services.device_manager import DeviceManager
@@ -75,10 +76,17 @@ async def lifespan(app: FastAPI) -> Any:  # type: ignore[type-arg]
     engine = PresenceEngine(bus, device_manager, confidence)
     engine.subscribe()
 
-    # 5. Create and start MQTT client + publisher
+    # 5. Create and start MQTT client + publisher + HA Discovery
     mqtt_client = MqttClient(config, bus)
     mqtt_publisher = MqttPublisher(mqtt_client, bus)
     mqtt_publisher.subscribe()
+
+    ha_discovery_enabled = config.get("home_assistant", "discovery_enabled", default=True)
+    if ha_discovery_enabled:
+        discovery_prefix = config.get("home_assistant", "discovery_prefix", default="homeassistant")
+        ha_discovery = HADiscovery(mqtt_client, bus, discovery_prefix)
+        ha_discovery.subscribe()
+
     await mqtt_client.connect()
 
     # 6. Create and start DetectorRegistry

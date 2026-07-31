@@ -54,17 +54,22 @@ class HADiscovery:
     def subscribe(self) -> None:
         """Subscribe to device events to trigger discovery."""
         self._bus.subscribe(EventType.DEVICE_DETECTED, self._on_device_detected)
+        self._bus.subscribe(EventType.DEVICE_UPDATED, self._on_device_updated)
         logger.info("ha_discovery_subscribed")
 
-    async def publish_discovery(self, device: Device) -> None:
+    async def publish_discovery(self, device: Device, force: bool = False) -> None:
         """Publish MQTT Discovery configs for a device.
 
         Creates binary_sensor and device_tracker discovery messages.
 
         Args:
             device: The Device entity to register in HA.
+            force: Whether to force re-publishing even if already discovered.
         """
-        if device.mac in self._discovered:
+        if not force and device.mac in self._discovered:
+            return
+
+        if not self._client.is_connected:
             return
 
         prefix = self._client.topic_prefix
@@ -143,6 +148,27 @@ class HADiscovery:
             ip=str(payload.get("ip", "")),
             hostname=str(payload.get("hostname", "")),
             vendor=str(payload.get("vendor", "")),
+            friendly_name=str(payload.get("friendly_name", "")),
         )
 
         await self.publish_discovery(device)
+
+    async def _on_device_updated(self, payload: EventPayload) -> None:
+        """Handle DEVICE_UPDATED event — re-publish discovery with updated metadata.
+
+        Args:
+            payload: Event payload with updated device data.
+        """
+        mac = str(payload.get("mac", ""))
+        if not mac:
+            return
+
+        device = Device(
+            mac=mac,
+            ip=str(payload.get("ip", "")),
+            hostname=str(payload.get("hostname", "")),
+            vendor=str(payload.get("vendor", "")),
+            friendly_name=str(payload.get("friendly_name", "")),
+        )
+
+        await self.publish_discovery(device, force=True)

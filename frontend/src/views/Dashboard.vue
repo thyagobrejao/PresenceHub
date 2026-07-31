@@ -50,6 +50,31 @@ function getDeviceIcon(type: string): string {
   return icons[type] || '📦'
 }
 
+const editingMac = ref<string | null>(null)
+const editingName = ref('')
+const saving = ref(false)
+
+function startEdit(device: Device) {
+  editingMac.value = device.mac
+  editingName.value = device.friendly_name || device.hostname || ''
+}
+
+function cancelEdit() {
+  editingMac.value = null
+  editingName.value = ''
+}
+
+async function saveEdit(mac: string) {
+  if (saving.value) return
+  saving.value = true
+  try {
+    await store.saveDeviceName(mac, editingName.value.trim())
+    editingMac.value = null
+  } finally {
+    saving.value = false
+  }
+}
+
 function formatUptime(lastSeen: string): string {
   const diff = Date.now() - new Date(lastSeen).getTime()
   const mins = Math.floor(diff / 60000)
@@ -140,9 +165,37 @@ function formatUptime(lastSeen: string): string {
           <div class="flex items-center space-x-2">
             <span class="text-2xl">{{ getDeviceIcon(device.device_type) }}</span>
             <div>
-              <h3 class="font-semibold text-gray-900 dark:text-gray-100">
-                {{ device.friendly_name || device.hostname || device.mac }}
-              </h3>
+              <div v-if="editingMac === device.mac" class="flex items-center space-x-1.5 mt-0.5">
+                <input
+                  v-model="editingName"
+                  @keyup.enter="saveEdit(device.mac)"
+                  @keyup.esc="cancelEdit"
+                  type="text"
+                  placeholder="Device Name..."
+                  class="px-2 py-0.5 text-sm rounded border border-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none w-32 sm:w-40 focus:ring-1 focus:ring-primary-500"
+                />
+                <button
+                  @click="saveEdit(device.mac)"
+                  :disabled="saving"
+                  title="Save name"
+                  class="text-green-600 hover:text-green-700 font-bold px-1 text-sm cursor-pointer"
+                >✓</button>
+                <button
+                  @click="cancelEdit"
+                  title="Cancel"
+                  class="text-gray-400 hover:text-gray-600 px-1 text-sm cursor-pointer"
+                >✕</button>
+              </div>
+              <div v-else class="flex items-center space-x-1.5">
+                <h3 class="font-semibold text-gray-900 dark:text-gray-100">
+                  {{ device.friendly_name || device.hostname || device.mac }}
+                </h3>
+                <button
+                  @click="startEdit(device)"
+                  title="Edit device name"
+                  class="text-xs text-gray-400 hover:text-primary-600 transition-colors cursor-pointer"
+                >✏️</button>
+              </div>
               <p class="text-xs text-gray-500 dark:text-gray-400 font-mono">{{ device.mac }}</p>
             </div>
           </div>
