@@ -1,0 +1,108 @@
+# =============================================================================
+# PresenceHub Configuration
+# =============================================================================
+# This file contains all configuration for the PresenceHub system.
+# Environment variables with prefix 'PH_' override these values.
+# See .env.example for common overrides.
+
+# -----------------------------------------------------------------------------
+# MQTT Broker Connection
+# -----------------------------------------------------------------------------
+mqtt:
+  host: localhost
+  port: 1883
+  username: ""
+  password: ""
+  client_id: presencehub
+  topic_prefix: home/presence
+  keepalive: 60
+  reconnect_interval: 5
+  reconnect_max_interval: 60
+  qos: 1
+  retain: false
+
+# -----------------------------------------------------------------------------
+# Network Settings
+# -----------------------------------------------------------------------------
+network:
+  interface: eth0
+  subnet: 192.168.1.0/24
+  ping_timeout: 2
+  ping_count: 1
+  arp_scan_interval: 60
+  mdns_scan_interval: 30
+  dhcp_lease_paths:
+    - /var/lib/dhcp/dhcpd.leases
+    - /var/lib/misc/dnsmasq.leases
+    - /tmp/dhcp.leases
+
+# -----------------------------------------------------------------------------
+# Presence Detection & Confidence Scoring
+# -----------------------------------------------------------------------------
+presence:
+  # Time in seconds before a device is considered offline (no detections)
+  timeout: 300
+  # Interval in seconds between confidence decay cycles
+  decay_interval: 60
+  # Points subtracted per decay cycle
+  decay_rate: 5
+  # Minimum confidence score to be considered online
+  online_threshold: 50
+  # Interval in seconds for stale device cleanup
+  stale_cleanup_interval: 600
+
+# -----------------------------------------------------------------------------
+# Detector Configuration
+# -----------------------------------------------------------------------------
+detectors:
+  arp:
+    enabled: true
+    interval: 60
+  mdns:
+    enabled: true
+    interval: 30
+  ping:
+    enabled: true
+    interval: 120
+  dhcp:
+    enabled: true
+    interval: 60
+
+# -----------------------------------------------------------------------------
+# REST API
+# -----------------------------------------------------------------------------
+api:
+  host: 0.0.0.0
+  port: 8000
+  cors_origins:
+    - "*"
+  swagger_enabled: true
+
+# -----------------------------------------------------------------------------
+# Home Assistant Integration
+# -----------------------------------------------------------------------------
+home_assistant:
+  discovery_enabled: true
+  discovery_prefix: homeassistant
+
+# -----------------------------------------------------------------------------
+# Database
+# -----------------------------------------------------------------------------
+database:
+  url: sqlite+aiosqlite:///./data/presencehub.db
+  echo: false
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+logging:
+  level: INFO
+  json_format: true
+  render_console: false
+
+# -----------------------------------------------------------------------------
+# Observability
+# -----------------------------------------------------------------------------
+observability:
+  prometheus_enabled: true
+  health_check_interval: 30
