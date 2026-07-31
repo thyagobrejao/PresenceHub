@@ -200,7 +200,7 @@ class MqttClient:
         self._client = aiomqtt.Client(
             hostname=self._host,
             port=self._port,
-            client_id=self._client_id,
+            identifier=self._client_id,
             username=self._username or None,
             password=self._password or None,
             keepalive=self._keepalive,
