@@ -6,6 +6,8 @@ via MQTT Discovery, requiring zero manual configuration.
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 
 from core.bus import AsyncioEventBus
@@ -37,6 +39,7 @@ class HADiscovery:
         self,
         client: MqttClient,
         bus: AsyncioEventBus,
+        device_manager: Any | None = None,
         discovery_prefix: str = "homeassistant",
     ) -> None:
         """Initialize HA Discovery.
@@ -44,10 +47,12 @@ class HADiscovery:
         Args:
             client: MQTT client instance.
             bus: Internal EventBus.
+            device_manager: Optional DeviceManager instance for looking up full device metadata.
             discovery_prefix: HA MQTT discovery prefix (default: homeassistant).
         """
         self._client = client
         self._bus = bus
+        self._device_manager = device_manager
         self._discovery_prefix = discovery_prefix
         self._discovered: set[str] = set()
 
@@ -142,14 +147,18 @@ class HADiscovery:
         if not mac:
             return
 
-        # Build minimal device for discovery
-        device = Device(
-            mac=mac,
-            ip=str(payload.get("ip", "")),
-            hostname=str(payload.get("hostname", "")),
-            vendor=str(payload.get("vendor", "")),
-            friendly_name=str(payload.get("friendly_name", "")),
-        )
+        device: Device | None = None
+        if self._device_manager:
+            device = await self._device_manager.get(mac)
+
+        if not device:
+            device = Device(
+                mac=mac,
+                ip=str(payload.get("ip", "")),
+                hostname=str(payload.get("hostname", "")),
+                vendor=str(payload.get("vendor", "")),
+                friendly_name=str(payload.get("friendly_name", "")),
+            )
 
         await self.publish_discovery(device)
 
@@ -163,12 +172,17 @@ class HADiscovery:
         if not mac:
             return
 
-        device = Device(
-            mac=mac,
-            ip=str(payload.get("ip", "")),
-            hostname=str(payload.get("hostname", "")),
-            vendor=str(payload.get("vendor", "")),
-            friendly_name=str(payload.get("friendly_name", "")),
-        )
+        device: Device | None = None
+        if self._device_manager:
+            device = await self._device_manager.get(mac)
+
+        if not device:
+            device = Device(
+                mac=mac,
+                ip=str(payload.get("ip", "")),
+                hostname=str(payload.get("hostname", "")),
+                vendor=str(payload.get("vendor", "")),
+                friendly_name=str(payload.get("friendly_name", "")),
+            )
 
         await self.publish_discovery(device, force=True)

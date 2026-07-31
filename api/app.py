@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI) -> Any:  # type: ignore[type-arg]
     ha_discovery_enabled = config.get("home_assistant", "discovery_enabled", default=True)
     if ha_discovery_enabled:
         discovery_prefix = config.get("home_assistant", "discovery_prefix", default="homeassistant")
-        ha_discovery = HADiscovery(mqtt_client, bus, discovery_prefix)
+        ha_discovery = HADiscovery(mqtt_client, bus, device_manager, discovery_prefix)
         ha_discovery.subscribe()
 
     await mqtt_client.connect()
