@@ -1,0 +1,75 @@
+services:
+  # =============================================================================
+  # MQTT Broker (Mosquitto) — Development local broker
+  # =============================================================================
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: presencehub-mosquitto-dev
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_dev_data:/mosquitto/data
+      - mosquitto_dev_log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-W", "3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - presencehub-dev
+
+  # =============================================================================
+  # PresenceHub Backend (Dev)
+  # =============================================================================
+  presencehub:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: presencehub-backend-dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PH_MQTT__HOST=mosquitto
+      - PH_MQTT__PORT=1883
+      - PH_DATABASE__URL=sqlite+aiosqlite:///./data/presencehub.db
+      - PH_LOGGING__LEVEL=DEBUG
+      - PH_NETWORK__INTERFACE=eth0
+    volumes:
+      - presencehub_dev_data:/app/data
+      - ./config/config.yaml:/app/config/config.yaml:ro
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - presencehub-dev
+
+  # =============================================================================
+  # PresenceHub Frontend (Vue 3 SPA - Dev)
+  # =============================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: presencehub-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - presencehub
+    networks:
+      - presencehub-dev
+
+volumes:
+  mosquitto_dev_data:
+  mosquitto_dev_log:
+  presencehub_dev_data:
+
+networks:
+  presencehub-dev:
+    driver: bridge
