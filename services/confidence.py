@@ -117,7 +117,7 @@ class ConfidenceCalculator:
             return DeviceStatus.OFFLINE
         return self._determine_status(score.score)
 
-    def apply_decay(self, source_ttl: int = 90) -> list[MacAddress]:
+    def apply_decay(self, source_ttl: int | None = None) -> list[MacAddress]:
         """Apply decay to all tracked devices.
 
         First expires detection sources that have not updated within source_ttl.
@@ -126,10 +126,14 @@ class ConfidenceCalculator:
 
         Args:
             source_ttl: Maximum age in seconds for a detection source before it expires.
+                       If None, the default_ttl (timeout) is used.
 
         Returns:
             List of MAC addresses that transitioned to offline.
         """
+        if source_ttl is None:
+            source_ttl = self._default_ttl
+
         went_offline: list[MacAddress] = []
 
         for mac, score in list(self._scores.items()):

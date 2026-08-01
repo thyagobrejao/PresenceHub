@@ -25,6 +25,7 @@ from detectors.registry import DetectorRegistry
 from mqtt.client import MqttClient
 from mqtt.discovery import HADiscovery
 from mqtt.publisher import MqttPublisher
+from models.enums import DeviceStatus, DetectionSource
 from services.confidence import ConfidenceCalculator
 from services.device_manager import DeviceManager
 from services.presence import PresenceEngine
@@ -71,6 +72,17 @@ async def lifespan(app: FastAPI) -> Any:  # type: ignore[type-arg]
         decay_rate=decay_rate,
         default_ttl=timeout,
     )
+
+    # Initialize online devices in the confidence calculator so their status can decay
+    for device in await device_manager.get_all():
+        if device.status == DeviceStatus.ONLINE:
+            confidence.process_detection(
+                mac=device.mac,
+                source=DetectionSource.ARP,  # Use ARP to start at 100 points
+                ip=device.ip,
+                hostname=device.hostname,
+                vendor=device.vendor,
+            )
 
     # 4. Create and subscribe PresenceEngine
     engine = PresenceEngine(bus, device_manager, confidence)
