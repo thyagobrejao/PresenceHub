@@ -46,28 +46,28 @@ def get_source_points(source: DetectionSource) -> int:
 class ConfidenceScore:
     """Tracks and calculates the confidence score for a device.
 
-    The score is the sum of points from all detection sources that have
-    recently detected the device. It decays over time when detections stop.
+    The score is the sum of points from all active detection sources that have
+    recently detected the device. Sources expire when not updated within TTL.
 
     Attributes:
         mac: Associated device MAC address.
         score: Current aggregated confidence score (0-100).
-        sources: Set of detection sources that contributed.
+        sources: Dict mapping detection source to its last detection timestamp.
         last_calculated: When the score was last updated.
     """
 
     mac: MacAddress
     score: ConfidenceValue = ConfidenceValue(0)
-    sources: set[DetectionSource] = field(default_factory=set)
+    sources: dict[DetectionSource, datetime] = field(default_factory=dict)
     last_calculated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def add_source(self, source: DetectionSource) -> None:
-        """Add a detection source and recalculate the score.
+        """Add or update a detection source and recalculate the score.
 
         Args:
-            source: The detection source to add.
+            source: The detection source to add/update.
         """
-        self.sources.add(source)
+        self.sources[source] = datetime.now(timezone.utc)
         self._recalculate()
 
     def remove_source(self, source: DetectionSource) -> None:
@@ -76,12 +76,35 @@ class ConfidenceScore:
         Args:
             source: The detection source to remove.
         """
-        self.sources.discard(source)
+        self.sources.pop(source, None)
         self._recalculate()
+
+    def expire_stale_sources(self, ttl_seconds: int = 120) -> list[DetectionSource]:
+        """Remove sources that have not updated within the TTL.
+
+        Args:
+            ttl_seconds: Maximum allowed age in seconds for a detection source.
+
+        Returns:
+            List of expired detection sources.
+        """
+        now = datetime.now(timezone.utc)
+        expired = [
+            source
+            for source, ts in self.sources.items()
+            if (now - ts).total_seconds() > ttl_seconds
+        ]
+        for source in expired:
+            del self.sources[source]
+
+        if expired:
+            self._recalculate()
+
+        return expired
 
     def _recalculate(self) -> None:
         """Recalculate the confidence score as sum of source points, capped at 100."""
-        total = sum(SOURCE_POINTS.get(s, 10) for s in self.sources)
+        total = sum(SOURCE_POINTS.get(s, 10) for s in self.sources.keys())
         self.score = ConfidenceValue(min(100, total))
         self.last_calculated = datetime.now(timezone.utc)
 
@@ -125,6 +148,6 @@ class ConfidenceScore:
         return {
             "mac": self.mac,
             "score": self.score,
-            "sources": [str(s) for s in self.sources],
+            "sources": [str(s) for s in self.sources.keys()],
             "last_calculated": self.last_calculated.isoformat(),
         }

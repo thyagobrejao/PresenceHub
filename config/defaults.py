@@ -34,16 +34,16 @@ DEFAULT_CONFIG: dict[str, Any] = {
         ],
     },
     "presence": {
-        "timeout": 300,
-        "decay_interval": 60,
-        "decay_rate": 5,
+        "timeout": 90,
+        "decay_interval": 15,
+        "decay_rate": 10,
         "online_threshold": 50,
-        "stale_cleanup_interval": 600,
+        "stale_cleanup_interval": 300,
     },
     "detectors": {
-        "arp": {"enabled": True, "interval": 60},
+        "arp": {"enabled": True, "interval": 30},
         "mdns": {"enabled": True, "interval": 30},
-        "ping": {"enabled": True, "interval": 120},
+        "ping": {"enabled": True, "interval": 30},
         "dhcp": {"enabled": True, "interval": 60},
     },
     "api": {

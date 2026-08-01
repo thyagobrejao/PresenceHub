@@ -41,15 +41,15 @@ network:
 # -----------------------------------------------------------------------------
 presence:
   # Time in seconds before a device is considered offline (no detections)
-  timeout: 300
+  timeout: 90
   # Interval in seconds between confidence decay cycles
-  decay_interval: 60
+  decay_interval: 15
   # Points subtracted per decay cycle
-  decay_rate: 5
+  decay_rate: 10
   # Minimum confidence score to be considered online
   online_threshold: 50
   # Interval in seconds for stale device cleanup
-  stale_cleanup_interval: 600
+  stale_cleanup_interval: 300
 
 # -----------------------------------------------------------------------------
 # Detector Configuration
@@ -57,13 +57,13 @@ presence:
 detectors:
   arp:
     enabled: true
-    interval: 60
+    interval: 30
   mdns:
     enabled: true
     interval: 30
   ping:
     enabled: true
-    interval: 120
+    interval: 30
   dhcp:
     enabled: true
     interval: 60

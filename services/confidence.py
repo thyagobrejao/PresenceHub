@@ -117,11 +117,15 @@ class ConfidenceCalculator:
             return DeviceStatus.OFFLINE
         return self._determine_status(score.score)
 
-    def apply_decay(self) -> list[MacAddress]:
+    def apply_decay(self, source_ttl: int = 90) -> list[MacAddress]:
         """Apply decay to all tracked devices.
 
+        First expires detection sources that have not updated within source_ttl.
         Reduces each device's score by the decay rate.
-        Devices that reach zero have their sources cleared.
+        Devices whose score drops below online_threshold are marked offline.
+
+        Args:
+            source_ttl: Maximum age in seconds for a detection source before it expires.
 
         Returns:
             List of MAC addresses that transitioned to offline.
@@ -130,14 +134,20 @@ class ConfidenceCalculator:
 
         for mac, score in list(self._scores.items()):
             was_online = self._determine_status(score.score) == DeviceStatus.ONLINE
+
+            # Expire detection sources that haven't updated within TTL (e.g. 90s)
+            score.expire_stale_sources(ttl_seconds=source_ttl)
+
+            # Apply numerical score decay
             score.decay(self._decay_rate)
+
             is_online = self._determine_status(score.score) == DeviceStatus.ONLINE
 
             if was_online and not is_online:
                 went_offline.append(mac)
                 logger.info("device_decayed_offline", mac=mac, score=score.score)
 
-            # Remove scores that have fully decayed and no sources
+            # Remove scores that have fully decayed and have no active sources
             if score.score <= 0 and not score.sources:
                 del self._scores[mac]
 
