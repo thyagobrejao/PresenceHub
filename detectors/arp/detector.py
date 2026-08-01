@@ -144,8 +144,8 @@ class ArpDetector(BaseDetector):
             # Get NUD state (last field)
             state = parts[-1].upper()
 
-            # Only accept REACHABLE and DELAY as active detections
-            if state not in ("REACHABLE", "DELAY"):
+            # Ignore entries in FAILED or INCOMPLETE states
+            if state in ("FAILED", "INCOMPLETE"):
                 continue
 
             if mac.lower() in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
