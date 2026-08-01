@@ -92,11 +92,83 @@ class ArpDetector(BaseDetector):
             return []
 
     def _read_linux_arp(self) -> list[dict[str, Any]]:
-        """Read ARP table from /proc/net/arp (Linux).
+        """Read ARP neighbor table using 'ip neigh' (Linux).
 
-        Format:
-            IP address       HW type     Flags       HW address            Mask     Device
-            192.168.1.1      0x1         0x2         aa:bb:cc:dd:ee:ff     *        eth0
+        Uses 'ip neigh' instead of /proc/net/arp because it exposes
+        the NUD (Neighbour Unreachability Detection) state:
+            REACHABLE — confirmed alive recently
+            STALE     — was alive but unconfirmed (device may be gone)
+            DELAY     — kernel is about to probe
+            PROBE     — actively probing
+            FAILED    — not reachable
+            INCOMPLETE — resolution in progress
+
+        Only REACHABLE and DELAY entries are treated as valid detections.
+        STALE entries are ignored to allow fast offline detection.
+
+        Returns:
+            List of parsed ARP entries for devices confirmed alive.
+        """
+        entries: list[dict[str, Any]] = []
+        try:
+            result = subprocess.run(
+                ["ip", "neigh"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            output = result.stdout
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            self._log.warning("ip_neigh_failed", error=str(exc))
+            # Fallback to /proc/net/arp
+            return self._read_proc_net_arp()
+
+        if not output:
+            return entries
+
+        # Format: 192.168.1.1 dev eth0 lladdr aa:bb:cc:dd:ee:ff REACHABLE
+        for line in output.strip().split("\n"):
+            parts = line.strip().split()
+            if len(parts) < 4:
+                continue
+
+            ip = parts[0]
+
+            # Find MAC address (lladdr field)
+            try:
+                lladdr_idx = parts.index("lladdr")
+                mac = parts[lladdr_idx + 1]
+            except (ValueError, IndexError):
+                continue
+
+            # Get NUD state (last field)
+            state = parts[-1].upper()
+
+            # Only accept REACHABLE and DELAY as active detections
+            if state not in ("REACHABLE", "DELAY"):
+                continue
+
+            if mac.lower() in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
+                continue
+
+            try:
+                normalized_mac = normalize_mac(mac)
+            except ValueError:
+                continue
+
+            entries.append({
+                "mac": normalized_mac,
+                "ip": ip,
+                "hostname": "",
+                "vendor": "",
+            })
+
+        return entries
+
+    def _read_proc_net_arp(self) -> list[dict[str, Any]]:
+        """Fallback: Read ARP table from /proc/net/arp (Linux).
+
+        Used only when 'ip neigh' is unavailable.
 
         Returns:
             List of parsed ARP entries.
@@ -109,7 +181,6 @@ class ArpDetector(BaseDetector):
             self._log.warning("proc_net_arp_read_failed", error=str(exc))
             return entries
 
-        # Skip header line
         for line in lines[1:]:
             parts = line.strip().split()
             if len(parts) < 4:
@@ -119,7 +190,6 @@ class ArpDetector(BaseDetector):
             flags = parts[2]
             mac = parts[3]
 
-            # Flags: 0x0 = incomplete, 0x2 = complete, 0x4 = permanent
             if flags == "0x0" or mac == "00:00:00:00:00:00":
                 continue
 
